@@ -153,6 +153,11 @@ def calculate_district(district_id: str) -> dict:
             "relative_household_income_change": round(rel_change, 6),
             "winners_share": round(winners_share, 4),
             "losers_share": round(losers_share, 4),
+            # Resident-based shares, matching the statewide pipeline.
+            # The rebate is universal, so every resident's household
+            # gains — these are 1.0 / 0.0 by construction.
+            "winners_share_residents": 1.0,
+            "losers_share_residents": 0.0,
             "poverty_pct_change": round(float(poverty_pct_change), 2),
             "child_poverty_pct_change": round(float(child_poverty_pct_change), 2),
             "state": TX_STATE,
