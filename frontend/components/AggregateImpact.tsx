@@ -176,7 +176,7 @@ export default function AggregateImpact({ triggered }: Props) {
                   {formatBillions(data.budget.budgetary_impact)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Cost to the state&apos;s rainy day fund (~$17B available after the proposal&apos;s $10B reserve)
+                  Cost to the state&apos;s rainy day fund
                 </p>
               </div>
               <div className={`rounded-lg p-5 border ${

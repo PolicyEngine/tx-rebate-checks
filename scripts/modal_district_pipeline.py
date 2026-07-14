@@ -80,15 +80,52 @@ def calculate_district(district_id: str) -> dict:
         )
         total_weight = household_weight.sum()
 
-        avg_change = float(REBATE_PER_HOUSEHOLD)
-        avg_baseline = (
-            (baseline_net * household_weight).sum() / total_weight
-            if total_weight > 0
-            else 0.0
+        # REBATE_PER_HOUSEHOLD is the only policy parameter; everything
+        # below is computed from the resulting change array.
+        income_change = np.full_like(
+            baseline_net, float(REBATE_PER_HOUSEHOLD)
         )
-        rel_change = avg_change / avg_baseline if avg_baseline > 0 else 0.0
-        winners_share = 1.0
-        losers_share = 0.0
+        if total_weight > 0:
+            avg_change = float(
+                (income_change * household_weight).sum() / total_weight
+            )
+            avg_baseline = (baseline_net * household_weight).sum() / total_weight
+            rel_change = avg_change / avg_baseline if avg_baseline > 0 else 0.0
+            winners_share = float(
+                (household_weight * (income_change > 1)).sum() / total_weight
+            )
+            losers_share = float(
+                (household_weight * (income_change < -1)).sum() / total_weight
+            )
+        else:
+            avg_change = rel_change = winners_share = losers_share = 0.0
+
+        # Resident-based winners/losers, matching the statewide pipeline:
+        # broadcast each household's change to its members.
+        person_weight = np.array(
+            sim.calculate("person_weight", period=YEAR)
+        )
+        hh_ids = np.array(sim.calculate("household_id", period=YEAR))
+        hh_ids_person = np.array(
+            sim.calculate("household_id", period=YEAR, map_to="person")
+        )
+        hh_order = np.argsort(hh_ids)
+        person_to_hh = hh_order[
+            np.searchsorted(hh_ids[hh_order], hh_ids_person)
+        ]
+        person_change = income_change[person_to_hh]
+        total_person_weight = person_weight.sum()
+        if total_person_weight > 0:
+            winners_share_residents = float(
+                (person_weight * (person_change > 1)).sum()
+                / total_person_weight
+            )
+            losers_share_residents = float(
+                (person_weight * (person_change < -1)).sum()
+                / total_person_weight
+            )
+        else:
+            winners_share_residents = losers_share_residents = 0.0
 
         # Poverty: add each household's rebate to its members' SPM unit
         # resources (equal per-person shares — same method as the
@@ -153,11 +190,8 @@ def calculate_district(district_id: str) -> dict:
             "relative_household_income_change": round(rel_change, 6),
             "winners_share": round(winners_share, 4),
             "losers_share": round(losers_share, 4),
-            # Resident-based shares, matching the statewide pipeline.
-            # The rebate is universal, so every resident's household
-            # gains — these are 1.0 / 0.0 by construction.
-            "winners_share_residents": 1.0,
-            "losers_share_residents": 0.0,
+            "winners_share_residents": round(winners_share_residents, 4),
+            "losers_share_residents": round(losers_share_residents, 4),
             "poverty_pct_change": round(float(poverty_pct_change), 2),
             "child_poverty_pct_change": round(float(child_poverty_pct_change), 2),
             "state": TX_STATE,

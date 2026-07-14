@@ -139,7 +139,7 @@ class TestIncomeBracketsCSV:
         data = _load_csv("income_brackets.csv")
         for row in data:
             if float(row["beneficiaries"]) > 0:
-                assert float(row["avg_benefit"]) == 1500.0
+                assert abs(float(row["avg_benefit"]) - 1500.0) < 0.01
 
 
 class TestCongressionalDistrictsCSV:
@@ -162,4 +162,4 @@ class TestCongressionalDistrictsCSV:
     def test_flat_average_change(self):
         data = _load_csv("congressional_districts.csv")
         for row in data:
-            assert float(row["average_household_income_change"]) == 1500.0
+            assert abs(float(row["average_household_income_change"]) - 1500.0) < 0.01

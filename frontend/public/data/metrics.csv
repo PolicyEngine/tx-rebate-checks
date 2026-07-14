@@ -1,12 +1,12 @@
 year,metric,value
-2027,budgetary_impact,-17737831500.0
+2027,budgetary_impact,-17737832448.0
 2027,federal_tax_revenue_impact,0.0
 2027,state_tax_revenue_impact,0.0
 2027,tax_revenue_impact,0.0
 2027,households,11825221.0
-2027,total_cost,17737831500.0
+2027,total_cost,17737832448.0
 2027,beneficiaries,11825221.0
-2027,avg_benefit,1500.0
+2027,avg_benefit,1500.0001220703125
 2027,winners,11825221.0
 2027,losers,0.0
 2027,winners_rate,100.0

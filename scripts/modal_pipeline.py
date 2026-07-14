@@ -95,9 +95,18 @@ def calculate_impacts() -> dict:
     sim = Microsimulation(dataset=TX_DATASET)
 
     # ===== FISCAL IMPACT =====
+    # REBATE_PER_HOUSEHOLD is the only policy parameter; every figure
+    # below is computed from the resulting change arrays.
     household_weight = np.array(sim.calculate("household_weight", period=YEAR))
-    total_households = float(household_weight.sum())
-    total_cost = total_households * REBATE_PER_HOUSEHOLD
+    weight_arr = household_weight
+    total_households = float(weight_arr.sum())
+
+    baseline_net_income = np.array(
+        sim.calculate("household_net_income", period=YEAR, map_to="household")
+    )
+    change_arr = np.full_like(baseline_net_income, float(REBATE_PER_HOUSEHOLD))
+    total_cost = float((change_arr * weight_arr).sum())
+    budgetary_impact = -total_cost
 
     # Sanity: the universal per-household reading should land near the
     # press release's implied $17B fund draw.
@@ -107,20 +116,43 @@ def calculate_impacts() -> dict:
             "ESF draw the proposal implies — check the dataset/weights."
         )
     print(
-        f"  {total_households:,.0f} households x ${REBATE_PER_HOUSEHOLD:,} "
-        f"= ${total_cost/1e9:.1f}B (ESF available: ${ESF_AVAILABLE/1e9:.0f}B)"
+        f"  {total_households:,.0f} households, total ${total_cost/1e9:.2f}B "
+        f"(ESF available: ${ESF_AVAILABLE/1e9:.0f}B)"
     )
 
-    budgetary_impact = -total_cost
-
-    baseline_net_income = np.array(
-        sim.calculate("household_net_income", period=YEAR, map_to="household")
+    winners = float(weight_arr[change_arr > 1].sum())
+    losers = float(weight_arr[change_arr < -1].sum())
+    beneficiary_mask = change_arr > 0
+    beneficiaries = float(weight_arr[beneficiary_mask].sum())
+    avg_benefit = (
+        float(np.average(change_arr[beneficiary_mask],
+                         weights=weight_arr[beneficiary_mask]))
+        if beneficiaries > 0
+        else 0.0
     )
-    change_arr = np.full_like(baseline_net_income, float(REBATE_PER_HOUSEHOLD))
-    weight_arr = household_weight
+    winners_rate = winners / total_households * 100 if total_households else 0.0
+    losers_rate = losers / total_households * 100 if total_households else 0.0
 
+    # Resident-based winners/losers: broadcast each household's change
+    # to its members via an explicit person-to-household index map.
     person_weight = np.array(sim.calculate("person_weight", period=YEAR))
+    hh_ids = np.array(sim.calculate("household_id", period=YEAR))
+    hh_ids_person = np.array(
+        sim.calculate("household_id", period=YEAR, map_to="person")
+    )
+    hh_order = np.argsort(hh_ids)
+    person_to_hh = hh_order[np.searchsorted(hh_ids[hh_order], hh_ids_person)]
+    person_change = change_arr[person_to_hh]
+
     total_residents = float(person_weight.sum())
+    winners_residents = float(person_weight[person_change > 1].sum())
+    losers_residents = float(person_weight[person_change < -1].sum())
+    winners_rate_residents = (
+        winners_residents / total_residents * 100 if total_residents else 0.0
+    )
+    losers_rate_residents = (
+        losers_residents / total_residents * 100 if total_residents else 0.0
+    )
 
     # ===== INCOME DECILE =====
     decile = np.array(
@@ -273,13 +305,17 @@ def calculate_impacts() -> dict:
     ]
     by_income_bracket = []
     for min_inc, max_inc, label in income_brackets:
-        mask = (agi > min_inc) & (agi <= max_inc)
+        mask = (agi > min_inc) & (agi <= max_inc) & beneficiary_mask
         n = float(weight_arr[mask].sum())
         by_income_bracket.append({
             "bracket": label,
             "beneficiaries": n,
-            "total_cost": n * REBATE_PER_HOUSEHOLD,
-            "avg_benefit": float(REBATE_PER_HOUSEHOLD) if n > 0 else 0.0,
+            "total_cost": float((change_arr[mask] * weight_arr[mask]).sum()),
+            "avg_benefit": (
+                float(np.average(change_arr[mask], weights=weight_arr[mask]))
+                if n > 0
+                else 0.0
+            ),
         })
 
     print("  Done.")
@@ -295,17 +331,17 @@ def calculate_impacts() -> dict:
         "decile": {"average": decile_average, "relative": decile_relative},
         "intra_decile": {"all": intra_decile_all, "deciles": intra_decile_deciles},
         "total_cost": total_cost,
-        "beneficiaries": total_households,
-        "avg_benefit": float(REBATE_PER_HOUSEHOLD),
-        "winners": total_households,
-        "losers": 0.0,
-        "winners_rate": 100.0,
-        "losers_rate": 0.0,
+        "beneficiaries": beneficiaries,
+        "avg_benefit": avg_benefit,
+        "winners": winners,
+        "losers": losers,
+        "winners_rate": winners_rate,
+        "losers_rate": losers_rate,
         "residents": total_residents,
-        "winners_residents": total_residents,
-        "losers_residents": 0.0,
-        "winners_rate_residents": 100.0,
-        "losers_rate_residents": 0.0,
+        "winners_residents": winners_residents,
+        "losers_residents": losers_residents,
+        "winners_rate_residents": winners_rate_residents,
+        "losers_rate_residents": losers_rate_residents,
         "poverty_baseline_rate": poverty_baseline_rate,
         "poverty_reform_rate": poverty_reform_rate,
         "poverty_rate_change": poverty_rate_change,
