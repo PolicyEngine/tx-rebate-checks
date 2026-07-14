@@ -163,20 +163,20 @@ export default function AggregateImpact({ triggered }: Props) {
           {/* Selected year impact - 3 cards */}
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-3">
-              Revenue change ({selectedYear})
+              Fiscal impact ({selectedYear})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className={`rounded-lg p-5 border ${
-                data.budget.state_tax_revenue_impact >= 0 ? 'bg-green-50 border-success' : 'bg-red-50 border-red-300'
+                data.budget.budgetary_impact >= 0 ? 'bg-green-50 border-success' : 'bg-red-50 border-red-300'
               }`}>
                 <p className="text-sm text-gray-700 mb-2">Economic Stabilization Fund draw</p>
                 <p className={`text-2xl font-bold ${
-                  data.budget.state_tax_revenue_impact >= 0 ? 'text-green-600' : 'text-red-600'
+                  data.budget.budgetary_impact >= 0 ? 'text-green-600' : 'text-red-600'
                 }`}>
-                  {formatBillions(data.budget.state_tax_revenue_impact)}
+                  {formatBillions(data.budget.budgetary_impact)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Cost to the state's rainy day fund (~$17B available after the proposal's $10B reserve)
+                  Cost to the state&apos;s rainy day fund (~$17B available after the proposal&apos;s $10B reserve)
                 </p>
               </div>
               <div className={`rounded-lg p-5 border ${
