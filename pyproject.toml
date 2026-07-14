@@ -1,0 +1,33 @@
+[project]
+name = "tx-rebate-checks"
+version = "1.0.0"
+description = "Texas $1,500 rebate check calculator and data pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Matches POLICYENGINE_US_PIN in the Modal scripts.
+    "policyengine-us==1.768.2",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    # The Modal pipelines' local entrypoints run in this environment
+    # (pandas comes in transitively via policyengine-us).
+    "modal>=1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tx_rebate_calc"]
