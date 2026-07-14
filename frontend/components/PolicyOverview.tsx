@@ -60,9 +60,16 @@ export default function PolicyOverview() {
             </h4>
             <ul className="text-sm text-gray-700 space-y-1">
               <li>
-                Hinojosa campaign press release, &ldquo;RECAP: Gina
-                Hinojosa Launches &lsquo;Money in Your Pocket&rsquo;
-                Economic Agenda&rdquo; (July 13, 2026)
+                <a
+                  href="https://ginafortexas.com/2026/07/recap-gina-hinojosa-launches-money-in-your-pocket-economic-agenda-across-houston-san-antonio-and-laredo/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-600 hover:underline"
+                >
+                  Hinojosa campaign press release, &ldquo;RECAP: Gina
+                  Hinojosa Launches &lsquo;Money in Your Pocket&rsquo;
+                  Economic Agenda&rdquo; (July 13, 2026)
+                </a>
               </li>
             </ul>
           </div>
