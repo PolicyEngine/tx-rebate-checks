@@ -11,6 +11,7 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH !== undefined
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   ...(basePath ? { basePath } : {}),
+  output: "standalone",
   // Set the output file tracing root to this project's frontend directory
   // to avoid issues with lockfiles in parent directories
   outputFileTracingRoot: path.join(__dirname),
