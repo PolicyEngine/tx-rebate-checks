@@ -163,7 +163,8 @@ export default function CongressionalDistrictImpact({ year = 2027 }: Props) {
         </h3>
         <p className="text-gray-600">
           Average household impact by congressional district under the{' '}
-          <strong>proposed $1,500 rebate check</strong> vs. current law.
+          <strong>proposed $1,500 rebate check</strong>{' '}
+          vs. current law.
           Hover over a district for details and click to pin.
         </p>
       </div>

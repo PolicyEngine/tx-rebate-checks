@@ -23,8 +23,8 @@ export default function PolicyOverview() {
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <h3 className="font-semibold text-gray-800 mb-2">The proposal</h3>
             <p className="text-sm text-gray-600">
-              A one-time <strong>$1,500 rebate check</strong> to Texas
-              families, paid from the Economic Stabilization Fund
+              A one-time <strong>$1,500 rebate check</strong>{' '}
+              to Texas families, paid from the Economic Stabilization Fund
               (the &ldquo;rainy day fund&rdquo;). The campaign has not
               specified eligibility rules, so this dashboard assumes{' '}
               <strong>one check per household with no income limit</strong>{' '}
@@ -38,7 +38,8 @@ export default function PolicyOverview() {
             <h3 className="font-semibold text-gray-800 mb-2">Cost</h3>
             <p className="text-sm text-gray-600">
               PolicyEngine estimates one check per household costs
-              roughly <strong>$17&ndash;18 billion</strong> (see the
+              roughly <strong>$17&ndash;18 billion</strong>{' '}
+              (see the
               Statewide impact tab for the precise figure), against the
               ~$17 billion the proposal would draw from the Economic
               Stabilization Fund. The press release states the fund
