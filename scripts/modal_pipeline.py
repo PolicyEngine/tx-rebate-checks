@@ -1,17 +1,15 @@
 """Modal-based state-level data generation pipeline for the Texas
 $1,500 rebate check dashboard ("Money in Your Pocket" proposal).
 
-The proposal sends one $1,500 check per household (assumption — the
-press release does not specify eligibility; this reading matches the
-stated Economic Stabilization Fund draw of ~$17 billion). Because the
-rebate is a flat, universal transfer with no phase-out, the pipeline
-runs a single current-law simulation and applies the rebate
-arithmetically:
-
-- every household's net income rises by exactly $1,500, and
-- poverty impacts add each household's rebate to its members' SPM
-  unit resources (allocated per person, so multi-SPM-unit households
-  split the check in proportion to their members).
+Model-native: the rebate is encoded in policyengine-us as the
+``gov/contrib/states/tx/rebate`` contributed reform (PR #9037,
+released in 1.771.0), so the pipeline runs a baseline (current law)
+and a reform simulation with the ``tx_rebate`` reform applied, and
+every figure is computed from the difference. The reform pays one
+$1,500 check per household with no income limit (assumption — the
+proposal does not specify eligibility; this reading matches the
+stated ~$17 billion Economic Stabilization Fund draw), integrated
+into household net income and SPM resources by the model itself.
 
 Runs against the ECPS state file (``states/TX.h5``), the same dataset
 family as the district pipeline, and writes CSVs to
@@ -19,6 +17,9 @@ family as the district pipeline, and writes CSVs to
 
 Usage:
     modal run scripts/modal_pipeline.py
+    # or, resilient to local client limits:
+    modal deploy scripts/modal_pipeline.py
+    python scripts/run_state_pipeline_detached.py
 """
 
 import os
@@ -28,7 +29,9 @@ import modal
 
 app = modal.App("tx-rebate-checks-pipeline")
 
-POLICYENGINE_US_PIN = "policyengine-us==1.768.2"
+# 1.771.2 ≥ 1.771.0, the first release containing the tx_rebate
+# contributed reform (PolicyEngine/policyengine-us#9037).
+POLICYENGINE_US_PIN = "policyengine-us==1.771.2"
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -41,41 +44,10 @@ image = (
     )
 )
 
-# Matches tx_rebate_calc.rebate (the Modal worker only sees this file).
-REBATE_PER_HOUSEHOLD = 1_500
 YEAR = 2027
 ESF_AVAILABLE = 17_000_000_000  # $27B fund minus $10B retained
 
 TX_DATASET = "hf://policyengine/policyengine-us-data/states/TX.h5"
-
-
-def _spm_rebate(sim, year: int):
-    """Allocate the per-household rebate to SPM units.
-
-    The check is per household; each member carries an equal share, and
-    an SPM unit receives the sum of its members' shares (identical to
-    the full check for the vast majority of households, which contain a
-    single SPM unit).
-
-    Returns (spm_rebate, person_to_spm_index) so callers can also map
-    SPM-level results back to persons.
-    """
-    import numpy as np
-
-    spm_ids = np.array(sim.calculate("spm_unit_id", period=year))
-    spm_ids_person = np.array(
-        sim.calculate("spm_unit_id", period=year, map_to="person")
-    )
-    hh_size_person = np.array(
-        sim.calculate("household_count_people", period=year, map_to="person")
-    )
-    share_person = REBATE_PER_HOUSEHOLD / np.maximum(hh_size_person, 1)
-
-    order = np.argsort(spm_ids)
-    person_to_spm = order[np.searchsorted(spm_ids[order], spm_ids_person)]
-    spm_rebate = np.zeros(len(spm_ids))
-    np.add.at(spm_rebate, person_to_spm, share_person)
-    return spm_rebate, person_to_spm
 
 
 @app.function(
@@ -85,31 +57,48 @@ def _spm_rebate(sim, year: int):
     retries=1,
 )
 def calculate_impacts() -> dict:
-    """Run the TX state-level analysis and return distributional /
-    fiscal / poverty / bracket breakdowns."""
+    """Run baseline vs tx_rebate reform on the TX state file and return
+    distributional / fiscal / poverty / bracket breakdowns."""
     import numpy as np
     from policyengine_us import Microsimulation
+    from policyengine_us.reforms.states.tx.rebate.tx_rebate import tx_rebate
 
     print(f"Starting TX rebate calculation for {YEAR}...")
 
-    sim = Microsimulation(dataset=TX_DATASET)
+    sim_baseline = Microsimulation(dataset=TX_DATASET)
+    sim_reform = Microsimulation(dataset=TX_DATASET, reform=tx_rebate)
 
     # ===== FISCAL IMPACT =====
-    # REBATE_PER_HOUSEHOLD is the only policy parameter; every figure
-    # below is computed from the resulting change arrays.
-    household_weight = np.array(sim.calculate("household_weight", period=YEAR))
-    weight_arr = household_weight
+    weight_arr = np.array(
+        sim_baseline.calculate("household_weight", period=YEAR)
+    )
     total_households = float(weight_arr.sum())
 
     baseline_net_income = np.array(
-        sim.calculate("household_net_income", period=YEAR, map_to="household")
+        sim_baseline.calculate(
+            "household_net_income", period=YEAR, map_to="household"
+        )
     )
-    change_arr = np.full_like(baseline_net_income, float(REBATE_PER_HOUSEHOLD))
+    reform_net_income = np.array(
+        sim_reform.calculate(
+            "household_net_income", period=YEAR, map_to="household"
+        )
+    )
+    change_arr = reform_net_income - baseline_net_income
+
     total_cost = float((change_arr * weight_arr).sum())
     budgetary_impact = -total_cost
 
-    # Sanity: the universal per-household reading should land near the
-    # press release's implied $17B fund draw.
+    # Sanity 1: the model's rebate outlay must equal the net-income
+    # change it produces (the reform has no interactions by design).
+    rebate_total = float(sim_reform.calculate("tx_rebate", period=YEAR).sum())
+    if abs(rebate_total - total_cost) > 0.001 * max(rebate_total, 1):
+        raise RuntimeError(
+            f"tx_rebate outlay ${rebate_total/1e9:.2f}B != net-income "
+            f"change ${total_cost/1e9:.2f}B — unexpected interaction."
+        )
+    # Sanity 2: the universal per-household reading should land near
+    # the press release's implied $17B fund draw.
     if not (12e9 < total_cost < 22e9):
         raise RuntimeError(
             f"Total cost ${total_cost/1e9:.1f}B is far from the ~$17B "
@@ -133,17 +122,20 @@ def calculate_impacts() -> dict:
     winners_rate = winners / total_households * 100 if total_households else 0.0
     losers_rate = losers / total_households * 100 if total_households else 0.0
 
-    # Resident-based winners/losers: broadcast each household's change
-    # to its members via an explicit person-to-household index map.
-    person_weight = np.array(sim.calculate("person_weight", period=YEAR))
-    hh_ids = np.array(sim.calculate("household_id", period=YEAR))
-    hh_ids_person = np.array(
-        sim.calculate("household_id", period=YEAR, map_to="person")
+    # Resident-based winners/losers: a resident counts as a winner when
+    # their household's net income rises.
+    person_weight = np.array(
+        sim_baseline.calculate("person_weight", period=YEAR)
     )
-    hh_order = np.argsort(hh_ids)
-    person_to_hh = hh_order[np.searchsorted(hh_ids[hh_order], hh_ids_person)]
-    person_change = change_arr[person_to_hh]
-
+    person_change = np.array(
+        sim_reform.calculate(
+            "household_net_income", period=YEAR, map_to="person"
+        )
+    ) - np.array(
+        sim_baseline.calculate(
+            "household_net_income", period=YEAR, map_to="person"
+        )
+    )
     total_residents = float(person_weight.sum())
     winners_residents = float(person_weight[person_change > 1].sum())
     losers_residents = float(person_weight[person_change < -1].sum())
@@ -156,7 +148,9 @@ def calculate_impacts() -> dict:
 
     # ===== INCOME DECILE =====
     decile = np.array(
-        sim.calculate("household_income_decile", period=YEAR, map_to="household")
+        sim_baseline.calculate(
+            "household_income_decile", period=YEAR, map_to="household"
+        )
     )
     decile_average = {}
     decile_relative = {}
@@ -186,7 +180,9 @@ def calculate_impacts() -> dict:
         "Gain more than 5%",
     ]
     people_per_hh = np.array(
-        sim.calculate("household_count_people", period=YEAR, map_to="household")
+        sim_baseline.calculate(
+            "household_count_people", period=YEAR, map_to="household"
+        )
     )
     capped_baseline = np.maximum(baseline_net_income, 1)
     rel_change_arr = change_arr / capped_baseline
@@ -213,86 +209,48 @@ def calculate_impacts() -> dict:
     }
 
     # ===== POVERTY =====
-    # Baseline and reform both computed from SPM resources vs threshold
-    # so the two scenarios use an identical definition.
-    spm_rebate, person_to_spm = _spm_rebate(sim, YEAR)
-    resources = np.array(sim.calculate("spm_unit_net_income", period=YEAR))
-    threshold = np.array(sim.calculate("spm_unit_spm_threshold", period=YEAR))
-
-    pov_bl_spm = resources < threshold
-    pov_rf_spm = (resources + spm_rebate) < threshold
-    deep_bl_spm = resources < 0.5 * threshold
-    deep_rf_spm = (resources + spm_rebate) < 0.5 * threshold
-
-    age_arr = np.array(sim.calculate("age", period=YEAR))
+    # Model-native: the reform carries the rebate into SPM resources,
+    # so poverty comes straight from the in_poverty variables.
+    age_arr = np.array(sim_baseline.calculate("age", period=YEAR))
     is_child = age_arr < 18
     pw_arr = person_weight
 
-    def _person_rate(spm_status, mask=None):
-        person_status = spm_status[person_to_spm]
-        if mask is None:
-            return float((person_status * pw_arr).sum() / pw_arr.sum() * 100)
-        denom = pw_arr[mask].sum()
-        return (
-            float((person_status[mask] * pw_arr[mask]).sum() / denom * 100)
-            if denom > 0
-            else 0.0
+    def _rates(var):
+        bl = np.array(
+            sim_baseline.calculate(var, period=YEAR, map_to="person")
+        ).astype(bool)
+        rf = np.array(
+            sim_reform.calculate(var, period=YEAR, map_to="person")
+        ).astype(bool)
+        overall = (
+            float((bl * pw_arr).sum() / pw_arr.sum() * 100),
+            float((rf * pw_arr).sum() / pw_arr.sum() * 100),
         )
+        cw = pw_arr[is_child]
+        child = (
+            float((bl[is_child] * cw).sum() / cw.sum() * 100),
+            float((rf[is_child] * cw).sum() / cw.sum() * 100),
+        )
+        return overall, child
 
-    poverty_baseline_rate = _person_rate(pov_bl_spm)
-    poverty_reform_rate = _person_rate(pov_rf_spm)
-    poverty_rate_change = poverty_reform_rate - poverty_baseline_rate
-    poverty_percent_change = (
-        poverty_rate_change / poverty_baseline_rate * 100
-        if poverty_baseline_rate > 0
-        else 0.0
-    )
+    (pov_bl, pov_rf), (cpov_bl, cpov_rf) = _rates("in_poverty")
+    (dpov_bl, dpov_rf), (dcpov_bl, dcpov_rf) = _rates("in_deep_poverty")
 
-    child_poverty_baseline_rate = _person_rate(pov_bl_spm, is_child)
-    child_poverty_reform_rate = _person_rate(pov_rf_spm, is_child)
-    child_poverty_rate_change = (
-        child_poverty_reform_rate - child_poverty_baseline_rate
-    )
-    child_poverty_percent_change = (
-        child_poverty_rate_change / child_poverty_baseline_rate * 100
-        if child_poverty_baseline_rate > 0
-        else 0.0
-    )
-
-    deep_poverty_baseline_rate = _person_rate(deep_bl_spm)
-    deep_poverty_reform_rate = _person_rate(deep_rf_spm)
-    deep_poverty_rate_change = (
-        deep_poverty_reform_rate - deep_poverty_baseline_rate
-    )
-    deep_poverty_percent_change = (
-        deep_poverty_rate_change / deep_poverty_baseline_rate * 100
-        if deep_poverty_baseline_rate > 0
-        else 0.0
-    )
-
-    deep_child_poverty_baseline_rate = _person_rate(deep_bl_spm, is_child)
-    deep_child_poverty_reform_rate = _person_rate(deep_rf_spm, is_child)
-    deep_child_poverty_rate_change = (
-        deep_child_poverty_reform_rate - deep_child_poverty_baseline_rate
-    )
-    deep_child_poverty_percent_change = (
-        deep_child_poverty_rate_change / deep_child_poverty_baseline_rate * 100
-        if deep_child_poverty_baseline_rate > 0
-        else 0.0
-    )
+    def _pct(bl, rf):
+        return (rf - bl) / bl * 100 if bl > 0 else 0.0
 
     print(
-        f"  poverty {poverty_baseline_rate:.2f}% -> {poverty_reform_rate:.2f}%"
-        f"  child {child_poverty_baseline_rate:.2f}% -> "
-        f"{child_poverty_reform_rate:.2f}%"
+        f"  poverty {pov_bl:.2f}% -> {pov_rf:.2f}%"
+        f"  child {cpov_bl:.2f}% -> {cpov_rf:.2f}%"
     )
 
     # ===== INCOME BRACKETS =====
     # Households grouped by AGI (Texas has no state income tax, so there
-    # is no state taxable-income measure to key on). Every household is
-    # affected — the rebate is universal.
+    # is no state taxable-income measure to key on).
     agi = np.array(
-        sim.calculate("adjusted_gross_income", period=YEAR, map_to="household")
+        sim_baseline.calculate(
+            "adjusted_gross_income", period=YEAR, map_to="household"
+        )
     )
     income_brackets = [
         (-float("inf"), 25_000, "$25k or less"),
@@ -342,22 +300,22 @@ def calculate_impacts() -> dict:
         "losers_residents": losers_residents,
         "winners_rate_residents": winners_rate_residents,
         "losers_rate_residents": losers_rate_residents,
-        "poverty_baseline_rate": poverty_baseline_rate,
-        "poverty_reform_rate": poverty_reform_rate,
-        "poverty_rate_change": poverty_rate_change,
-        "poverty_percent_change": poverty_percent_change,
-        "child_poverty_baseline_rate": child_poverty_baseline_rate,
-        "child_poverty_reform_rate": child_poverty_reform_rate,
-        "child_poverty_rate_change": child_poverty_rate_change,
-        "child_poverty_percent_change": child_poverty_percent_change,
-        "deep_poverty_baseline_rate": deep_poverty_baseline_rate,
-        "deep_poverty_reform_rate": deep_poverty_reform_rate,
-        "deep_poverty_rate_change": deep_poverty_rate_change,
-        "deep_poverty_percent_change": deep_poverty_percent_change,
-        "deep_child_poverty_baseline_rate": deep_child_poverty_baseline_rate,
-        "deep_child_poverty_reform_rate": deep_child_poverty_reform_rate,
-        "deep_child_poverty_rate_change": deep_child_poverty_rate_change,
-        "deep_child_poverty_percent_change": deep_child_poverty_percent_change,
+        "poverty_baseline_rate": pov_bl,
+        "poverty_reform_rate": pov_rf,
+        "poverty_rate_change": pov_rf - pov_bl,
+        "poverty_percent_change": _pct(pov_bl, pov_rf),
+        "child_poverty_baseline_rate": cpov_bl,
+        "child_poverty_reform_rate": cpov_rf,
+        "child_poverty_rate_change": cpov_rf - cpov_bl,
+        "child_poverty_percent_change": _pct(cpov_bl, cpov_rf),
+        "deep_poverty_baseline_rate": dpov_bl,
+        "deep_poverty_reform_rate": dpov_rf,
+        "deep_poverty_rate_change": dpov_rf - dpov_bl,
+        "deep_poverty_percent_change": _pct(dpov_bl, dpov_rf),
+        "deep_child_poverty_baseline_rate": dcpov_bl,
+        "deep_child_poverty_reform_rate": dcpov_rf,
+        "deep_child_poverty_rate_change": dcpov_rf - dcpov_bl,
+        "deep_child_poverty_percent_change": _pct(dcpov_bl, dcpov_rf),
         "by_income_bracket": by_income_bracket,
     }
 

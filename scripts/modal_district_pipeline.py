@@ -5,12 +5,10 @@ Calculates per-district impacts for Texas's 38 congressional districts
 (TX-01..TX-38; state FIPS 48) and writes ``congressional_districts.csv``
 to ``frontend/public/data/``.
 
-The rebate is a flat $1,500 per household (see scripts/modal_pipeline.py
-for the eligibility assumption), so each district needs only a single
-current-law simulation: the average household change is $1,500
-everywhere by construction, and districts differ in the *relative*
-income change, and in poverty impacts from adding the rebate to SPM
-resources.
+Model-native: each district runs a baseline (current law) and a reform
+simulation with the ``gov/contrib/states/tx/rebate`` contributed reform
+(policyengine-us PR #9037) applied; every figure is computed from the
+difference.
 
 Dataset note: the district runs use the per-district calibrated files
 (``policyengine-us-data/districts/TX-XX.h5``, ~9k households each),
@@ -29,9 +27,8 @@ import modal
 
 app = modal.App("tx-rebate-checks-district-pipeline")
 
-# Matches scripts/modal_pipeline.py.
-POLICYENGINE_US_PIN = "policyengine-us==1.768.2"
-REBATE_PER_HOUSEHOLD = 1_500
+# Matches scripts/modal_pipeline.py (1.771.0 first contains tx_rebate).
+POLICYENGINE_US_PIN = "policyengine-us==1.771.2"
 YEAR = 2027
 
 image = (
@@ -61,30 +58,40 @@ def get_tx_districts() -> list[str]:
     retries=2,
 )
 def calculate_district(district_id: str) -> dict:
-    """Run a single district's current-law sim and apply the rebate
-    arithmetically."""
+    """Run baseline vs tx_rebate reform for a single district."""
     import numpy as np
     from policyengine_us import Microsimulation
+    from policyengine_us.reforms.states.tx.rebate.tx_rebate import tx_rebate
 
     print(f"Calculating {district_id}...")
     dataset_url = f"hf://policyengine/policyengine-us-data/districts/{district_id}.h5"
 
     try:
-        sim = Microsimulation(dataset=dataset_url)
+        sim_baseline = Microsimulation(dataset=dataset_url)
+        sim_reform = Microsimulation(dataset=dataset_url, reform=tx_rebate)
+
+        # Sanity: the reform must actually pay the rebate here.
+        rebate_total = float(
+            sim_reform.calculate("tx_rebate", period=YEAR).sum()
+        )
+        if rebate_total <= 0:
+            raise RuntimeError(
+                f"tx_rebate paid nothing in {district_id} — is the "
+                "pinned policyengine-us release missing the reform?"
+            )
 
         household_weight = np.array(
-            sim.calculate("household_weight", period=YEAR)
+            sim_baseline.calculate("household_weight", period=YEAR)
         )
         baseline_net = np.array(
-            sim.calculate("household_net_income", period=YEAR)
+            sim_baseline.calculate("household_net_income", period=YEAR)
         )
+        reform_net = np.array(
+            sim_reform.calculate("household_net_income", period=YEAR)
+        )
+        income_change = reform_net - baseline_net
         total_weight = household_weight.sum()
 
-        # REBATE_PER_HOUSEHOLD is the only policy parameter; everything
-        # below is computed from the resulting change array.
-        income_change = np.full_like(
-            baseline_net, float(REBATE_PER_HOUSEHOLD)
-        )
         if total_weight > 0:
             avg_change = float(
                 (income_change * household_weight).sum() / total_weight
@@ -100,20 +107,19 @@ def calculate_district(district_id: str) -> dict:
         else:
             avg_change = rel_change = winners_share = losers_share = 0.0
 
-        # Resident-based winners/losers, matching the statewide pipeline:
-        # broadcast each household's change to its members.
+        # Resident-based winners/losers, matching the statewide pipeline.
         person_weight = np.array(
-            sim.calculate("person_weight", period=YEAR)
+            sim_baseline.calculate("person_weight", period=YEAR)
         )
-        hh_ids = np.array(sim.calculate("household_id", period=YEAR))
-        hh_ids_person = np.array(
-            sim.calculate("household_id", period=YEAR, map_to="person")
+        person_change = np.array(
+            sim_reform.calculate(
+                "household_net_income", period=YEAR, map_to="person"
+            )
+        ) - np.array(
+            sim_baseline.calculate(
+                "household_net_income", period=YEAR, map_to="person"
+            )
         )
-        hh_order = np.argsort(hh_ids)
-        person_to_hh = hh_order[
-            np.searchsorted(hh_ids[hh_order], hh_ids_person)
-        ]
-        person_change = income_change[person_to_hh]
         total_person_weight = person_weight.sum()
         if total_person_weight > 0:
             winners_share_residents = float(
@@ -127,47 +133,32 @@ def calculate_district(district_id: str) -> dict:
         else:
             winners_share_residents = losers_share_residents = 0.0
 
-        # Poverty: add each household's rebate to its members' SPM unit
-        # resources (equal per-person shares — same method as the
-        # statewide pipeline).
-        spm_ids = np.array(sim.calculate("spm_unit_id", period=YEAR))
-        spm_ids_person = np.array(
-            sim.calculate("spm_unit_id", period=YEAR, map_to="person")
-        )
-        hh_size_person = np.array(
-            sim.calculate(
-                "household_count_people", period=YEAR, map_to="person"
-            )
-        )
-        share_person = REBATE_PER_HOUSEHOLD / np.maximum(hh_size_person, 1)
-        order = np.argsort(spm_ids)
-        person_to_spm = order[
-            np.searchsorted(spm_ids[order], spm_ids_person)
-        ]
-        spm_rebate = np.zeros(len(spm_ids))
-        np.add.at(spm_rebate, person_to_spm, share_person)
-
-        resources = np.array(
-            sim.calculate("spm_unit_net_income", period=YEAR)
-        )
-        threshold = np.array(
-            sim.calculate("spm_unit_spm_threshold", period=YEAR)
-        )
+        # Poverty: model-native — the reform carries the rebate into
+        # SPM resources.
         spm_unit_weight = np.array(
-            sim.calculate("spm_unit_weight", period=YEAR)
+            sim_baseline.calculate("spm_unit_weight", period=YEAR)
         )
-        pov_bl = resources < threshold
-        pov_rf = (resources + spm_rebate) < threshold
-
         total_spm_weight = spm_unit_weight.sum()
         if total_spm_weight > 0:
+            pov_bl = np.array(
+                sim_baseline.calculate(
+                    "spm_unit_is_in_spm_poverty", period=YEAR
+                )
+            )
+            pov_rf = np.array(
+                sim_reform.calculate(
+                    "spm_unit_is_in_spm_poverty", period=YEAR
+                )
+            )
             bl_rate = (pov_bl * spm_unit_weight).sum() / total_spm_weight
             rf_rate = (pov_rf * spm_unit_weight).sum() / total_spm_weight
             poverty_pct_change = (
                 (rf_rate - bl_rate) / bl_rate * 100 if bl_rate > 0 else 0.0
             )
             children = np.array(
-                sim.calculate("spm_unit_count_children", period=YEAR)
+                sim_baseline.calculate(
+                    "spm_unit_count_children", period=YEAR
+                )
             )
             child_w = spm_unit_weight * children
             total_child_w = child_w.sum()
@@ -198,7 +189,7 @@ def calculate_district(district_id: str) -> dict:
             "year": YEAR,
         }
         print(
-            f"  {district_id}: rel={rel_change:.4%}  "
+            f"  {district_id}: avg=${avg_change:.2f}  rel={rel_change:.4%}  "
             f"poverty={poverty_pct_change:+.1f}%  "
             f"child poverty={child_poverty_pct_change:+.1f}%"
         )

@@ -16,11 +16,14 @@ reading most consistent with the campaign's own arithmetic: the ~$17
 billion fund draw covers Texas's ~11-12 million households at $1,500
 each.
 
-Because the rebate is a flat, universal transfer, no reform simulation
-is needed: the pipelines run a single current-law simulation and apply
-the rebate arithmetically (every household +$1,500; poverty impacts
-add each household's rebate to its members' SPM unit resources). The
-household tab computes entirely client-side — no backend.
+The rebate is encoded in policyengine-us as the
+`gov/contrib/states/tx/rebate` contributed reform
+([PR #9037](https://github.com/PolicyEngine/policyengine-us/pull/9037),
+released in 1.771.0): the pipelines run baseline vs reform simulations
+and compute every figure from the difference, with the model carrying
+the rebate into household net income and SPM resources. The household
+tab computes entirely client-side — no backend (the reform is a flat
+transfer, so the household impact is a constant +$1,500).
 
 - **Frontend**: `frontend/` (Next.js / Tailwind)
 - **Modal pipelines**:

@@ -2124,7 +2124,7 @@ wheels = [
 
 [[package]]
 name = "policyengine-us"
-version = "1.768.2"
+version = "1.771.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "microdf-python" },
@@ -2136,9 +2136,9 @@ dependencies = [
     { name = "tables", version = "3.11.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2e/c8/0696a650ce45f5f76ed60cc780da87d167080b26069b34266f3229950671/policyengine_us-1.768.2.tar.gz", hash = "sha256:de503b70e84fede81fb9d267b93f129e2dc5ecfc24a8a1d41bca65a6bc5fbfae", size = 11212081, upload-time = "2026-07-09T15:46:11.967Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b6/ec/f567ad1e60ec89484e69f7e928c1cdfcbbf11f25a2992929fe26bd85d040/policyengine_us-1.771.2.tar.gz", hash = "sha256:046e9445554c90862a4ebc1920d136ed2de72bc42ea2ffbe3e799fd4acf0a2e4", size = 11243325, upload-time = "2026-07-14T21:51:25.667Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/28/913a9a677a0af02f0a8e523c7c46638d07de09cd30a243b4edacc81d5ed0/policyengine_us-1.768.2-py3-none-any.whl", hash = "sha256:1f7dc5ae40aca9f9669ea04de1c8cda8db7c64a276431222ee3872493e513499", size = 13340736, upload-time = "2026-07-09T15:46:08.939Z" },
+    { url = "https://files.pythonhosted.org/packages/20/c3/69ecab31598927fbb75c058e7bf9a10f6bbcd448a3bfb1bf174a6a3c4db7/policyengine_us-1.771.2-py3-none-any.whl", hash = "sha256:091e06e3609781c4f75fd9bb5a31e6e7bd3bf31caba50be6a1076691dd231016", size = 13399705, upload-time = "2026-07-14T21:51:21.682Z" },
 ]
 
 [[package]]
@@ -2910,7 +2910,7 @@ dev = [
 requires-dist = [
     { name = "modal", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "numpy", specifier = ">=1.24.0" },
-    { name = "policyengine-us", specifier = "==1.768.2" },
+    { name = "policyengine-us", specifier = "==1.771.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
 ]
