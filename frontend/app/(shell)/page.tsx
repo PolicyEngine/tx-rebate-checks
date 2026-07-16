@@ -32,10 +32,10 @@ export default function Home() {
             Texas $1,500 rebate check calculator
           </h1>
           <p className="text-lg opacity-90">
-            See the impact of the proposed $1,500 rebate checks for Texas
-            households — part of gubernatorial nominee Gina Hinojosa&apos;s
-            &ldquo;Money in Your Pocket&rdquo; agenda — statewide and by
-            congressional district
+            See how the $1,500 rebate checks proposed in gubernatorial
+            nominee Gina Hinojosa&apos;s &ldquo;Money in Your Pocket&rdquo;
+            agenda would affect Texas households, statewide and across
+            all 38 congressional districts
           </p>
         </div>
       </div>
