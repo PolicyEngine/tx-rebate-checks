@@ -10,13 +10,14 @@ describe('PolicyOverview', () => {
     ).toBeInTheDocument();
   });
 
-  it('displays the two summary cards', () => {
+  it('focuses the overview on the proposal itself', () => {
     render(<PolicyOverview />);
     expect(screen.getByText('The proposal')).toBeInTheDocument();
-    expect(screen.getByText('Cost')).toBeInTheDocument();
+    // Cost context lives on the Statewide impact tab, not the overview.
+    expect(screen.queryByText('Cost')).not.toBeInTheDocument();
   });
 
-  it('states the eligibility assumption', () => {
+  it('states the eligibility terms', () => {
     render(<PolicyOverview />);
     expect(
       screen.getByText(/one check per household with no income limit/),

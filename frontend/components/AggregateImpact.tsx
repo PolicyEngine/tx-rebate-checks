@@ -235,6 +235,16 @@ export default function AggregateImpact({ triggered }: Props) {
               impact is $1,500 throughout.
             </p>
           </div>
+
+          {/* Cost context footnote */}
+          <p className="text-xs text-gray-500 italic">
+            The total cost above is set against the ~$17 billion the
+            proposal would draw from the Economic Stabilization Fund
+            ($27 billion drawn down to a $10 billion reserve). The press
+            release states the fund &ldquo;will be automatically
+            replenished for any future emergency&rdquo; through the
+            severance-tax transfers that feed it.
+          </p>
         </div>
       )}
 

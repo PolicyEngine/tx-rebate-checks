@@ -19,35 +19,18 @@ export default function PolicyOverview() {
           for tax year 2027, the first year the next governor could
           deliver it.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h3 className="font-semibold text-gray-800 mb-2">The proposal</h3>
-            <p className="text-sm text-gray-600">
-              A one-time <strong>$1,500 rebate check</strong>{' '}
-              to Texas families, paid from the Economic Stabilization Fund
-              (the &ldquo;rainy day fund&rdquo;). The campaign has not
-              specified eligibility rules, so this dashboard assumes{' '}
-              <strong>one check per household with no income limit</strong>{' '}
-              — the reading most consistent with the campaign&apos;s own
-              arithmetic: drawing the fund from $27 billion down to $10
-              billion frees ~$17 billion, almost exactly $1,500 for each
-              of Texas&apos;s ~11&ndash;12 million households.
-            </p>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h3 className="font-semibold text-gray-800 mb-2">Cost</h3>
-            <p className="text-sm text-gray-600">
-              PolicyEngine estimates one check per household costs
-              roughly <strong>$17&ndash;18 billion</strong>{' '}
-              (see the
-              Statewide impact tab for the precise figure), against the
-              ~$17 billion the proposal would draw from the Economic
-              Stabilization Fund. The press release states the fund
-              &ldquo;will be automatically replenished for any future
-              emergency&rdquo; through the severance-tax transfers that
-              feed it.
-            </p>
-          </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+          <h3 className="font-semibold text-gray-800 mb-2">The proposal</h3>
+          <p className="text-sm text-gray-600">
+            A one-time <strong>$1,500 rebate check</strong>{' '}
+            for every Texas household &mdash;{' '}
+            <strong>one check per household with no income limit</strong>{' '}
+            &mdash; paid from the Economic Stabilization Fund (the
+            &ldquo;rainy day fund&rdquo;). Drawing the fund from $27
+            billion down to a $10 billion reserve frees ~$17 billion,
+            covering a check for each of Texas&apos;s ~11&ndash;12 million
+            households. Cost estimates are on the Statewide impact tab.
+          </p>
         </div>
       </div>
 
