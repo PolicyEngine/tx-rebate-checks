@@ -3,7 +3,7 @@ name = "tx-rebate-checks"
 version = "1.0.0"
 description = "Texas $1,500 rebate check calculator and data pipeline"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # Matches POLICYENGINE_US_PIN in the Modal scripts.
     "policyengine-us==1.771.2",
